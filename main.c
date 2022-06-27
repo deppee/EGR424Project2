@@ -4,6 +4,8 @@
 
  /* LCD: VSS = Pmeter GND, VDD = Pmeter 5v, V0 = Pmeter Contrast
   *           RS = P4.0, RW = P4.1, E = P4.2, D4 = P4.4, D5 = P4.5, D6 = P4.6, D7 = P4.7, A = 5v, K = GND
+  *
+  * BUZZER: one end to GND, one end to P3.7
   */
 
 #define RS 1 //P4.0
@@ -24,6 +26,10 @@ void PORT1_IRQHandler(void);
 void checkWins(void);
 void userWon(void);
 void userLost(void);
+void Sound_init(void);
+void PlaySound(int pitch, int duration,unsigned short NotePause);
+void SoundOne(void);
+void SoundTwo(void);
 
 /* Global Variables */
 // 0->idle, 1->first scroll, 2->check for win
@@ -42,6 +48,7 @@ void main(void) {
 	SysTick_Init();             // initialize SysTick Timer
 	LCD_init();                 // initialize LCD
 	Port1_init();               // initialize buttons
+	Sound_init();               // initialize sound
 
 	NVIC_EnableIRQ(PORT1_IRQn); // enable interrupts on port 1
 	__enable_interrupt();
@@ -87,7 +94,7 @@ void userWon(void) {
         SysTick_delay_ms(1);
     }
 
-    SysTick_delay_ms(1000);
+    SoundTwo();
 }
 
 void userLost(void) {
@@ -115,6 +122,8 @@ void userLost(void) {
         LCD_data(thirdLine[i]);
         SysTick_delay_ms(1);
     }
+
+    SoundOne();
 }
 
 /**
@@ -230,6 +239,41 @@ void PORT1_IRQHandler(void) {
     }
 }
 
+void Sound_init(void) {
+    P3->DIR |= BIT7;
+    P3->OUT &= ~BIT7;
+}
+
+void PlaySound(int pitch, int duration,unsigned short NotePause) {
+    uint32_t i=0;
+    for(i = 0; i < duration; i++){
+        P3->OUT |= BIT7;
+        SysTick_delay_ms(pitch);
+        P3->OUT &= ~BIT7;
+        SysTick_delay_ms(pitch);
+     }
+    SysTick_delay_ms(NotePause);
+}
+
+
+void SoundOne(void) {
+    PlaySound(2, 200, 100);
+    PlaySound(4, 100, 100);
+    PlaySound(6, 150, 100);
+}
+
+void SoundTwo(void){
+    PlaySound(2, 200, 100);
+    PlaySound(2, 50, 50);
+    PlaySound(2, 50, 50);
+    PlaySound(2, 50, 50);
+    PlaySound(2, 100, 50);
+    PlaySound(2, 100, 100);
+    PlaySound(2, 400, 100);
+
+}
+
+
 
 /**
  * Prints a Welcome message to the LCD screen. This
@@ -286,7 +330,7 @@ void WelcomeScreen(void) {
         SysTick_delay_ms(1);
     }
 
-    SysTick_delay_ms(3000);
+    SysTick_delay_ms(2000);
 }
 
 /**
@@ -370,7 +414,7 @@ void SysTick_Init(void) {
  *  portion of code is inspired by Emily Deppe's
  *  EGR226 slot machine project.
  */
-void SysTick_delay_ms (uint16_t delay) {
+void SysTick_delay_ms(uint16_t delay) {
     SysTick -> LOAD = ((delay * 3000) -1);          // delay for 1 msecond per delay value
     SysTick -> VAL = 0;                             // any write to CVR clears it
     while ( (SysTick-> CTRL & 0x00010000) == 0);    // wait for flag to be SET
@@ -381,10 +425,13 @@ void SysTick_delay_ms (uint16_t delay) {
  *  portion of code is inspired by Emily Deppe's
  *  EGR226 slot machine project.
  */
-void SysTick_delay_us (uint16_t delay) {
+void SysTick_delay_us(uint16_t delay) {
     SysTick -> LOAD = ((delay * 3) -1);             // delay for 1 usecond per delay value
     SysTick -> VAL = 0;                             // any write to CVR clears it
     while ( (SysTick-> CTRL & 0x00010000) == 0);    // wait for flag to be SET
 }
+
+
+
 
 

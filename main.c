@@ -29,23 +29,19 @@ void userLost(void);
 
 void CreateCustomCharacter (unsigned char *Pattern, const char Location);
 
-void setupSerial_BT();
+int UART_MSend(char *a);
+int UART_Send(char a);
+int UART_Receive(void);
 void UART_init(void);
-void writeOutput(char *string);
-void readInput(char *string);
 
-#define BUFFER_SIZE 100
-char INPUT_BUFFER[BUFFER_SIZE];
-char string[BUFFER_SIZE];
-uint8_t read_location = 0; // used in the main application to read valid data that hasn't been read yet
 
 /* Global Variables */
 // 0->idle, 1->first scroll, 2->check for win
 int play = 0;
-int n1[3] = {0,0,0};
-int n2[3] = {0,0,0};
-int n3[3] = {0,0,0};
-uint8_t storage_location = 0; // used in the interrupt to store new data
+int n1[3] = {0,1,2};
+int n2[3] = {3,4,5};
+int n3[3] = {6,7,0};
+int received = 0;
 
 /**
  * main.c
@@ -73,13 +69,20 @@ void main(void) {
     CreateCustomCharacter(snowflake,8);
 
     WelcomeScreen();
-    setupSerial_BT();
-    writeOutput("Initialization successful!");
+    UART_init();
+    UART_MSend("Let's play =]\n");
     SysTick_delay_ms(1000);
 
     while(1) {
-        readInput(string);                  // Read the input up to \n, store in string.  This function doesn't return until \n is received
-        printf("%s\n", string);
+        if(received == 83){
+            received = 0;
+            UART_MSend("Spinning!\n");
+            play = 1;       // break out of loop and start the reel
+        }
+        if(received == 80){
+            received = 0;
+            play = 3;       // break out of loop and stop the reel
+        }
 
         if (play == 1 || play == 2) {
             PlayScreen();           // play one scroll
@@ -116,7 +119,7 @@ void userWon(void) {
     LCD_command(1);                         // clear display
     SysTick_delay_us(100);
     char thirdLine[] = "  You've Won!!";       // prints to second line
-    writeOutput("Great job, you've won!");
+    UART_MSend("Great job, you've won!\n");
     int thirdNum = 14;                      // number of characters on second line
 
     SysTick_delay_ms(500);
@@ -139,7 +142,7 @@ void userLost(void) {
     char firstLine[] = "  You've Lost!";    // prints to first line
     int firstNum = 14;                      // number of characters on first line
     char thirdLine[] = "    Try Again";     // prints to second line
-    writeOutput("Sorry, you lost!");
+    UART_MSend("Sorry, you lost! Try again?\n");
     int thirdNum = 13;                      // number of characters on second line
 
     SysTick_delay_ms(500);
@@ -273,7 +276,7 @@ void WelcomeScreen(void) {
     int firstNum = 16;                          // number of characters on first line
     char thirdLine[] = "  Slot Machine";        // prints to second line
     int thirdNum = 14;                          // number of characters on second line
-    writeOutput("Leigha and Emily's slot machine!");
+    UART_MSend("Leigha and Emily's slot machine!");
 
     SysTick_delay_ms(500);
 
@@ -298,7 +301,7 @@ void WelcomeScreen(void) {
     char firstLine2[] =  "Let's play...";       // prints to first line
     int firstNum2 = 13;                         // number of characters on first line
     char thirdLine2[] = "SPIN TO WIN!";         // prints to third line
-    writeOutput("Spin to WIN!");
+    UART_MSend("Spin to WIN!");
     int thirdNum2 = 12;                         // number of characters on third line
     SysTick_delay_ms(500);
 
@@ -417,113 +420,55 @@ void SysTick_delay_us (uint16_t delay) {
     while ( (SysTick-> CTRL & 0x00010000) == 0);    // wait for flag to be SET
 }
 
-void setupSerial_BT()
-{
+int UART_Send(char a){
+    while(!(EUSCI_A0 -> IFG & 0x02));   // wait for transmit buffer to be empty
+    EUSCI_A0 -> TXBUF = a;              // send a character
 
-    P1->SEL0 |=  (BIT2 | BIT3); // P1.2 and P1.3 are EUSCI_A0 RX
-    P1->SEL1 &= ~(BIT2 | BIT3); // and TX respectively.
+    return (int)a;
+}
 
-    EUSCI_A0->CTLW0  = BIT0; // Disables EUSCI. Default configuration is 8N1
-    EUSCI_A0->CTLW0 |= BIT7; // Connects to SMCLK BIT[7:6] = 10
-    EUSCI_A0->CTLW0 |= (BIT(15)|BIT(14)|BIT(11));  //BIT15 = Parity, BIT14 = Even, BIT11 = Two Stop Bits
-    EUSCI_A0->BRW = 1;  // UCBR Value from above
-    EUSCI_A0->MCTLW = 0x01A1; //UCBRS (Bits 15-8) & UCBRF (Bits 7-4) & UCOS16 (Bit 0)
+int UART_MSend(char *a){
+    unsigned int len = strlen(a);
 
-    EUSCI_A0->CTLW0 &= ~BIT0;  // Enable EUSCI
+    while(*a != '\0')
+    {
+        while(!(EUSCI_A0 -> IFG & 0x02));
+        EUSCI_A0 -> TXBUF = *a++;
+    }
+
+    return len;
+}
+void EUSCIA0_IRQHandler(void){
+    if (EUSCI_A0->IFG & BIT0)  // Interrupt on the receive line
+    {
+        received = EUSCI_A0->RXBUF;
+        received = (int)received;
+        EUSCI_A0->IFG &= ~BIT0; // Clear the interrupt flag right away in case new data is ready
+    }
+}
+int UART_Receive(void){
+    int b;
+    while ((EUSCI_A0->IFG & BIT0) == 0);    // A character has been sent!!
+    b = EUSCI_A0->RXBUF;            // store the new piece of data at the present location in the buffer
+    EUSCI_A0->IFG &= ~BIT0;                 // Clear the interrupt flag
+
+    return (int)b;
+}
+
+void UART_init(void){
+
+    P1->SEL0 |=  (BIT2 | BIT3); // P1.2 = RX, P1.3 = TX
+    P1->SEL1 &= ~(BIT2 | BIT3);
+
+    EUSCI_A0->CTLW0  |= BIT0;  // put UART software in reset mode
+    EUSCI_A0->MCTLW  &= ~BIT0;  // disable oversampling mode
+    EUSCI_A0->BRW = 26;          // set the baud rate as 3MHz / 115200
+    EUSCI_A0->CTLW0  &= ~(BIT(15)|BIT(12)|BIT(11));   //BIT15 = no parity, BIT12 = 8-bit, BIT11 = 1-stop bit
+    EUSCI_A0->CTLW0  |= (BIT7|BIT6);            // SMCLOCK
+    EUSCI_A0->CTLW0  &= ~BIT0;  // enable EUSCI
+    //  stop bit, no parity, SMCLK clock source and 8-bit data size
     EUSCI_A0->IFG &= ~BIT0;    // Clear interrupt
     EUSCI_A0->IE |= BIT0;      // Enable interrupt
     NVIC_EnableIRQ(EUSCIA0_IRQn);
-
-
 }
-
-void EUSCIA0_IRQHandler(void)   // UART CodeBlocks
-{
-    if (EUSCI_A0->IFG & BIT0)  // Interrupt on the receive line
-    {
-        INPUT_BUFFER[storage_location] = EUSCI_A0->RXBUF; // store the new piece of data at the present location in the buffer
-        EUSCI_A0->IFG &= ~BIT0; // Clear the interrupt flag right away in case new data is ready
-        storage_location++; // update to the next position in the buffer
-        if(storage_location == BUFFER_SIZE) // if the end of the buffer was reached, loop back to the start
-            storage_location = 0;
-    }
-}
-
-void readInput(char *string)
-{
-    int i = 0;  // Location in the char array "string" that is being written to
-    char temp[BUFFER_SIZE];
-    // One of the few do/while loops I've written, but need to read a character before checking to see if a \n has been read
-    do
-    {
-        // If a new line hasn't been found yet, but we are caught up to what has been received, wait here for new data
-        while(read_location == storage_location && INPUT_BUFFER[read_location] != '\n');
-        temp[i] = INPUT_BUFFER[read_location];  // Manual copy of valid character into "string"
-        INPUT_BUFFER[read_location] = '\0';
-        i++; // Increment the location in "string" for next piece of data
-        read_location++; // Increment location in INPUT_BUFFER that has been read
-        if(read_location == BUFFER_SIZE)  // If the end of INPUT_BUFFER has been reached, loop back to 0
-            read_location = 0;
-    }
-    while(temp[i-1] != '\n'); // If a \n was just read, break out of the while loop
-
-    temp[i-1] = '\0'; // Replace the \n with a \0 to end the string when returning this function
-        temp[i-2] = '\0';   // just for bluetooth, the app ends statements with LF + CR instead of \n
-
-    strcpy(string, temp);
-}
-
-
-void writeOutput(char *string)
-{
-
-    int i = 0;  // Location in the char array "string" that is being written to
-    // send to CodeBlocks UART
-    while(string[i] != '\0') {
-        EUSCI_A0->TXBUF = string[i];
-        i++;
-        while(!(EUSCI_A0->IFG & BIT1));
-    }
-
-
-//    // send a null after every write to break out of read loop
-//    if(string[0] == '/0')
-//    {
-//    //send null
-//        EUSCI_A0->TXBUF = '\0';
-//        while(!(EUSCI_A0->IFG & BIT1));
-//    }
-//
-//    while(UCA0STATW & UCBUSY);
-
-//    int tx_index = 0;
-//    int length = (strlen(data)+1);
-//
-//    while(tx_index <= (strlen(data)+1)){
-//
-//        // Wait for TX buffer to be ready for new data
-//
-//        while(!(UCA0IFG & UCTXIFG));
-//
-//
-//
-//        // Push data to TX buffer
-//
-//        UCA0TXBUF = data[tx_index];
-//
-//
-//
-//        // Increment index
-//
-//        tx_index++;
-//
-//    }
-//
-//
-//
-//    // Wait until the last byte is completely sent
-//
-//    while(UCA0STATW & UCBUSY);
-}
-
 

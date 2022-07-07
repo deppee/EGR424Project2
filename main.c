@@ -1,11 +1,11 @@
 #include "msp.h"
 #include <stdio.h>
 #include <stdbool.h>
+#include "custom_characters.h"
+#include <string.h>
 
  /* LCD: VSS = Pmeter GND, VDD = Pmeter 5v, V0 = Pmeter Contrast
   *           RS = P4.0, RW = P4.1, E = P4.2, D4 = P4.4, D5 = P4.5, D6 = P4.6, D7 = P4.7, A = 5v, K = GND
-  *
-  * BUZZER: one end to GND, one end to P3.7
   */
 
 #define RS 1 //P4.0
@@ -26,6 +26,14 @@ void PORT1_IRQHandler(void);
 void checkWins(void);
 void userWon(void);
 void userLost(void);
+
+void CreateCustomCharacter (unsigned char *Pattern, const char Location);
+
+int UART_MSend(char *a);
+int UART_Send(char a);
+int UART_Receive(void);
+void UART_init(void);
+
 void Sound_init(void);
 void PlaySound(int pitch, int duration,unsigned short NotePause);
 void SoundOne(void);
@@ -34,44 +42,77 @@ void SoundTwo(void);
 /* Global Variables */
 // 0->idle, 1->first scroll, 2->check for win
 int play = 0;
-char row1[] = "@#^$?%*!";
-char row2[] = "%!*?@^#";
-char row3[] = "~$^&*@%=!#+";
+int n1[3] = {0,1,2};
+int n2[3] = {3,4,5};
+int n3[3] = {6,7,0};
+int received = 0;
 
 /**
  * main.c
  */
 void main(void) {
 
-	WDT_A->CTL = WDT_A_CTL_PW | WDT_A_CTL_HOLD;		// stop watchdog timer
+    WDT_A->CTL = WDT_A_CTL_PW | WDT_A_CTL_HOLD;     // stop watchdog timer
 
-	SysTick_Init();             // initialize SysTick Timer
-	LCD_init();                 // initialize LCD
-	Port1_init();               // initialize buttons
-	Sound_init();               // initialize sound
+    SysTick_Init();             // initialize SysTick Timer
+    LCD_init();                 // initialize LCD
+    Port1_init();               // initialize buttons
+    Sound_init();
 
-	NVIC_EnableIRQ(PORT1_IRQn); // enable interrupts on port 1
-	__enable_interrupt();
+    NVIC_EnableIRQ(PORT1_IRQn); // enable interrupts on port 1
+    __enable_interrupt();
 
-	WelcomeScreen();
-	SysTick_delay_ms(1000);
 
-	while(1) {
-	    if (play == 1 || play == 2) {
-	        PlayScreen();           // play one scroll
-	    } else if (play == 3) {
-	        // check if user has won
-	        checkWins();
-	        play = 0;
-	    }
-	}
+    CreateCustomCharacter(smile,0);
+    CreateCustomCharacter(music_note,1);
+    CreateCustomCharacter(bell,2);
+    CreateCustomCharacter(firework,3);
+    CreateCustomCharacter(heart,4);
+    CreateCustomCharacter(bomb,5);
+    CreateCustomCharacter(ant,6);
+    CreateCustomCharacter(man,7);
+    CreateCustomCharacter(snowflake,8);
+
+    WelcomeScreen();
+    UART_init();
+    UART_MSend("Let's play =]\n");
+    SysTick_delay_ms(1000);
+
+    while(1) {
+        if(received == 83){
+            received = 0;
+            UART_MSend("Spinning!\n");
+            play = 1;       // break out of loop and start the reel
+        }
+        if(received == 80){
+            received = 0;
+            play = 3;       // break out of loop and stop the reel
+        }
+
+        if (play == 1 || play == 2) {
+            PlayScreen();           // play one scroll
+        } else if (play == 3) {
+            // check if user has won
+            checkWins();
+            play = 0;
+        }
+    }
+}
+
+
+void CreateCustomCharacter (unsigned char *Pattern, const char Location)
+{
+    int i=0;
+    LCD_command(0x40+(Location*8));     //Send the Address of CGRAM
+    for (i=0; i<8; i++)
+        LCD_data(Pattern [ i ] );         //Pass the bytes of pattern on LCD
 }
 
 void checkWins(void) {
 
-    if ((row1[0] == row2[0]) && (row1[0] == row3[0]) ||
-        (row1[1] == row2[1]) && (row1[1] == row3[1]) ||
-        (row1[2] == row2[2]) && (row1[2] == row3[2])) {
+    if ((n1[0] == n1[1]) && (n1[0] == n1[2]) ||     // horizontal win
+        (n2[0] == n2[1]) && (n2[0] == n2[2]) ||
+        (n3[0] == n3[1]) && (n3[0] == n3[2])) {
         userWon();
     } else {
         userLost();
@@ -83,6 +124,7 @@ void userWon(void) {
     LCD_command(1);                         // clear display
     SysTick_delay_us(100);
     char thirdLine[] = "  You've Won!!";       // prints to second line
+    UART_MSend("Great job, you've won!\n");
     int thirdNum = 14;                      // number of characters on second line
 
     SysTick_delay_ms(500);
@@ -94,6 +136,7 @@ void userWon(void) {
         SysTick_delay_ms(1);
     }
 
+    SysTick_delay_ms(1000);
     SoundTwo();
 }
 
@@ -105,6 +148,7 @@ void userLost(void) {
     char firstLine[] = "  You've Lost!";    // prints to first line
     int firstNum = 14;                      // number of characters on first line
     char thirdLine[] = "    Try Again";     // prints to second line
+    UART_MSend("Sorry, you lost! Try again?\n");
     int thirdNum = 13;                      // number of characters on second line
 
     SysTick_delay_ms(500);
@@ -122,7 +166,6 @@ void userLost(void) {
         LCD_data(thirdLine[i]);
         SysTick_delay_ms(1);
     }
-
     SoundOne();
 }
 
@@ -136,41 +179,12 @@ void PlayScreen(void) {
 
     uint8_t i;
 
-    // shift rows
-    row1[0] = row2[0];
-    row1[1] = row2[1];
-    row1[2] = row2[2];
-    row1[3] = row2[3];
-    row1[4] = row2[4];
-    row1[5] = row2[5];
-    row1[6] = row2[6];
-
-    row2[0] = row3[0];
-    row2[1] = row3[1];
-    row2[2] = row3[2];
-    row2[3] = row3[3];
-    row2[4] = row3[4];
-    row2[5] = row3[5];
-    row2[6] = row3[6];
-
     // generate a new row
     srand(time());
     char c;
-    int n = rand() % 10;
-    for (i = 0; i < n; ++i) {
-        c = row3[0];
-        row3[0] = row3[1];
-        row3[1] = row3[2];
-        row3[2] = row3[3];
-        row3[3] = row3[4];
-        row3[4] = row3[5];
-        row3[5] = row3[6];
-        row3[6] = row3[7];
-        row3[7] = row3[8];
-        row3[8] = row3[9];
-        row3[9] = row3[10];
-        row3[10] = c;
-     }
+    n1[0] = rand() % 7;
+    n1[1] = rand() % 7;
+    n1[2] = rand() % 7;
 
     // clear LCD if first scroll
     if (play == 1) {
@@ -182,23 +196,38 @@ void PlayScreen(void) {
     LCD_command(0x85);                   //set cursor at center of first line
     SysTick_delay_us(100);
     for(i = 0; i < 3; i++) {
-        LCD_data(row1[i]);
+        LCD_data(n3[i]);
         SysTick_delay_us(1);
     }
 
     LCD_command(0xC5);                   //set cursor at center of second line
     SysTick_delay_us(100);
     for(i = 0; i < 3; i++) {
-        LCD_data(row2[i]);
+        LCD_data(n2[i]);
         SysTick_delay_us(1);
     }
 
     LCD_command(0x95);                      //set cursor center of third line
     SysTick_delay_us(100);
     for(i = 0; i < 3; i++) {
-        LCD_data(row3[i]);
+        LCD_data(n1[i]);
         SysTick_delay_us(1);
     }
+
+    // shift rows up
+
+    int temp[3];
+    temp[0] = n2[0];
+    temp[1] = n2[1];
+    temp[2] = n2[2];
+
+    n2[0] = n1[0];
+    n2[1] = n1[1];
+    n2[2] = n1[2];
+
+    n3[0] = temp[0];
+    n3[1] = temp[1];
+    n3[2] = temp[2];
 
      SysTick_delay_ms(500);
 }
@@ -239,41 +268,6 @@ void PORT1_IRQHandler(void) {
     }
 }
 
-void Sound_init(void) {
-    P3->DIR |= BIT7;
-    P3->OUT &= ~BIT7;
-}
-
-void PlaySound(int pitch, int duration,unsigned short NotePause) {
-    uint32_t i=0;
-    for(i = 0; i < duration; i++){
-        P3->OUT |= BIT7;
-        SysTick_delay_ms(pitch);
-        P3->OUT &= ~BIT7;
-        SysTick_delay_ms(pitch);
-     }
-    SysTick_delay_ms(NotePause);
-}
-
-
-void SoundOne(void) {
-    PlaySound(2, 200, 100);
-    PlaySound(4, 100, 100);
-    PlaySound(6, 150, 100);
-}
-
-void SoundTwo(void){
-    PlaySound(2, 200, 100);
-    PlaySound(2, 50, 50);
-    PlaySound(2, 50, 50);
-    PlaySound(2, 50, 50);
-    PlaySound(2, 100, 50);
-    PlaySound(2, 100, 100);
-    PlaySound(2, 400, 100);
-
-}
-
-
 
 /**
  * Prints a Welcome message to the LCD screen. This
@@ -289,6 +283,7 @@ void WelcomeScreen(void) {
     int firstNum = 16;                          // number of characters on first line
     char thirdLine[] = "  Slot Machine";        // prints to second line
     int thirdNum = 14;                          // number of characters on second line
+    UART_MSend("Leigha and Emily's slot machine!");
 
     SysTick_delay_ms(500);
 
@@ -313,6 +308,7 @@ void WelcomeScreen(void) {
     char firstLine2[] =  "Let's play...";       // prints to first line
     int firstNum2 = 13;                         // number of characters on first line
     char thirdLine2[] = "SPIN TO WIN!";         // prints to third line
+    UART_MSend("Spin to WIN!");
     int thirdNum2 = 12;                         // number of characters on third line
     SysTick_delay_ms(500);
 
@@ -330,7 +326,7 @@ void WelcomeScreen(void) {
         SysTick_delay_ms(1);
     }
 
-    SysTick_delay_ms(2000);
+    SysTick_delay_ms(3000);
 }
 
 /**
@@ -414,7 +410,7 @@ void SysTick_Init(void) {
  *  portion of code is inspired by Emily Deppe's
  *  EGR226 slot machine project.
  */
-void SysTick_delay_ms(uint16_t delay) {
+void SysTick_delay_ms (uint16_t delay) {
     SysTick -> LOAD = ((delay * 3000) -1);          // delay for 1 msecond per delay value
     SysTick -> VAL = 0;                             // any write to CVR clears it
     while ( (SysTick-> CTRL & 0x00010000) == 0);    // wait for flag to be SET
@@ -425,13 +421,94 @@ void SysTick_delay_ms(uint16_t delay) {
  *  portion of code is inspired by Emily Deppe's
  *  EGR226 slot machine project.
  */
-void SysTick_delay_us(uint16_t delay) {
+void SysTick_delay_us (uint16_t delay) {
     SysTick -> LOAD = ((delay * 3) -1);             // delay for 1 usecond per delay value
     SysTick -> VAL = 0;                             // any write to CVR clears it
     while ( (SysTick-> CTRL & 0x00010000) == 0);    // wait for flag to be SET
 }
 
+int UART_Send(char a){
+    while(!(EUSCI_A0 -> IFG & 0x02));   // wait for transmit buffer to be empty
+    EUSCI_A0 -> TXBUF = a;              // send a character
+
+    return (int)a;
+}
+
+int UART_MSend(char *a){
+    unsigned int len = strlen(a);
+
+    while(*a != '\0')
+    {
+        while(!(EUSCI_A0 -> IFG & 0x02));
+        EUSCI_A0 -> TXBUF = *a++;
+    }
+
+    return len;
+}
+void EUSCIA0_IRQHandler(void){
+    if (EUSCI_A0->IFG & BIT0)  // Interrupt on the receive line
+    {
+        received = EUSCI_A0->RXBUF;
+        received = (int)received;
+        EUSCI_A0->IFG &= ~BIT0; // Clear the interrupt flag right away in case new data is ready
+    }
+}
+int UART_Receive(void){
+    int b;
+    while ((EUSCI_A0->IFG & BIT0) == 0);    // A character has been sent!!
+    b = EUSCI_A0->RXBUF;            // store the new piece of data at the present location in the buffer
+    EUSCI_A0->IFG &= ~BIT0;                 // Clear the interrupt flag
+
+    return (int)b;
+}
+
+void UART_init(void){
+
+    P1->SEL0 |=  (BIT2 | BIT3); // P1.2 = RX, P1.3 = TX
+    P1->SEL1 &= ~(BIT2 | BIT3);
+
+    EUSCI_A0->CTLW0  |= BIT0;  // put UART software in reset mode
+    EUSCI_A0->MCTLW  &= ~BIT0;  // disable oversampling mode
+    EUSCI_A0->BRW = 26;          // set the baud rate as 3MHz / 115200
+    EUSCI_A0->CTLW0  &= ~(BIT(15)|BIT(12)|BIT(11));   //BIT15 = no parity, BIT12 = 8-bit, BIT11 = 1-stop bit
+    EUSCI_A0->CTLW0  |= (BIT7|BIT6);            // SMCLOCK
+    EUSCI_A0->CTLW0  &= ~BIT0;  // enable EUSCI
+    //  stop bit, no parity, SMCLK clock source and 8-bit data size
+    EUSCI_A0->IFG &= ~BIT0;    // Clear interrupt
+    EUSCI_A0->IE |= BIT0;      // Enable interrupt
+    NVIC_EnableIRQ(EUSCIA0_IRQn);
+}
+
+void Sound_init(void) {
+    P3->DIR |= BIT7;
+    P3->OUT &= ~BIT7;
+}
+
+void PlaySound(int pitch, int duration,unsigned short NotePause) {
+    uint32_t i=0;
+    for(i = 0; i < duration; i++){
+        P3->OUT |= BIT7;
+        SysTick_delay_ms(pitch);
+        P3->OUT &= ~BIT7;
+        SysTick_delay_ms(pitch);
+     }
+    SysTick_delay_ms(NotePause);
+}
 
 
+void SoundOne(void) {
+    PlaySound(2, 200, 100);
+    PlaySound(4, 100, 100);
+    PlaySound(6, 150, 100);
+}
 
+void SoundTwo(void){
+    PlaySound(2, 200, 100);
+    PlaySound(2, 50, 50);
+    PlaySound(2, 50, 50);
+    PlaySound(2, 50, 50);
+    PlaySound(2, 100, 50);
+    PlaySound(2, 100, 100);
+    PlaySound(2, 400, 100);
 
+}

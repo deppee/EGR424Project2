@@ -39,7 +39,7 @@ void main(void) {
     __enable_interrupt();
 
 
-    CreateCustomCharacter(smile,0);
+    CreateCustomCharacter(smile,0);         // store each custom character in CGRAM
     CreateCustomCharacter(music_note,1);
     CreateCustomCharacter(bell,2);
     CreateCustomCharacter(firework,3);
@@ -55,12 +55,12 @@ void main(void) {
     SysTick_delay_ms(1000);
 
     while(1) {
-        if(received == 83){
+        if(received == 83){     // SPIN button pressed
             received = 0;
             UART_MSend("Spinning!\n");
             play = 1;       // break out of loop and start the reel
         }
-        if(received == 80){
+        if(received == 80){     // STOP button pressed
             received = 0;
             play = 3;       // break out of loop and stop the reel
         }
@@ -74,7 +74,16 @@ void main(void) {
         }
     }
 }
-
+/*
+ * Port1_init: initialize port 1 buttons with interrupts
+ *
+ * INPUTS: none
+ *
+ * OUTPUTS: none
+ *
+ * NOTES:
+ *
+ */
 /**
  * Initialization function to set up ports P1.1 and P1.4
  *  as buttons with interrupts.
@@ -98,14 +107,12 @@ void PORT1_IRQHandler(void) {
 
     // if button is pressed, play the game.
     if ((P1->IN & BIT1)== 0) {
-        printf("playyy\n");
         play = 1;
         P1->IFG &= ~BIT1;
     }
 
     // if button is pressed, stop the game.
     if ((P1->IN & BIT4)== 0) {
-        printf("stop\n");
         play = 3;
         P1->IFG &= ~BIT4;
     }

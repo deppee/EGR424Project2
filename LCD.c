@@ -16,7 +16,22 @@ extern int play;
 extern int n1[3];
 extern int n2[3];
 extern int n3[3];
-
+/*
+ * CreateCustomCharacter: store a 8x8 bit character in CGRAM
+ *      A maximum of 8 characters can be stored.
+ *      Some code from: https://openlabpro.com/guide/custom-character-lcd-pic/
+ *
+ * INPUTS:
+ *      Pattern (Unsigned char*) the bit array of the character
+ *      Location (const char) where in CGRAM to store the character
+ *
+ * OUTPUTS:
+ *      none
+ *
+ * NOTES:
+ *      none
+ *
+ */
 
 void CreateCustomCharacter (unsigned char *Pattern, const char Location)
 {
@@ -25,7 +40,19 @@ void CreateCustomCharacter (unsigned char *Pattern, const char Location)
     for (i=0; i<8; i++)
         LCD_data(Pattern [ i ] );         //Pass the bytes of pattern on LCD
 }
-
+/*
+ * Checkwins: check if the same character is present 3 in a row in any of the rows
+ *
+ * INPUTS:
+ *      n1, n2, n3 (int) global variables.  Contains the address of the chracter in CGRAM
+ *
+ * OUTPUTS:
+ *      none
+ *
+ * NOTES:
+ *      none
+ *
+ */
 void checkWins(void) {
 
     if ((n1[0] == n1[1]) && (n1[0] == n1[2]) ||     // horizontal win
@@ -37,6 +64,19 @@ void checkWins(void) {
     }
 }
 
+/*
+ * UserWon: if the user won then play the win sound and print a win message to BT and the LCD
+ *
+ * INPUTS:
+ *      none
+ *
+ * OUTPUTS:
+ *      none
+ *
+ * NOTES:
+ *      none
+ *
+ */
 void userWon(void) {
     int i;
     LCD_command(1);                         // clear display
@@ -57,6 +97,20 @@ void userWon(void) {
     SysTick_delay_ms(1000);
     SoundTwo();
 }
+
+/*
+ * Userlost: if the user lost then play the lose sound and print a lose message to BT and the LCD
+ *
+ * INPUTS:
+ *      none
+ *
+ * OUTPUTS:
+ *      none
+ *
+ * NOTES:
+ *      none
+ *
+ */
 
 void userLost(void) {
 
@@ -87,11 +141,21 @@ void userLost(void) {
     SoundOne();
 }
 
-/**
- * This function controls and displays the symbols
- *  the represent the slot machine. This portion
- *  of code is inspired by Emily Deppe's EGR226
- *  slot machine project.
+/*
+ * PlayScreen: This function controls and displays the symbols
+ *          that represent the slot machine. This portion
+ *          of code is inspired by Emily Deppe's EGR226
+ *          slot machine project.
+ *
+ * INPUTS:
+ *      n1, n2, n3 (int) global variables.  Contains the address of the chracter in CGRAM
+ *
+ * OUTPUTS:
+ *      none
+ *
+ * NOTES:
+ *      none
+ *
  */
 void PlayScreen(void) {
 
@@ -151,9 +215,16 @@ void PlayScreen(void) {
 }
 
 /**
- * Prints a Welcome message to the LCD screen. This
- *  portion of code is inspired by Emily Deppe's
- *  EGR226 slot machine project.
+ * Welcome screen: Prints a Welcome message to the LCD screen. This
+ *          portion of code is inspired by Emily Deppe's
+ *          EGR226 slot machine project.
+ *
+ * INPUTS:
+ *      none
+ *
+ * OUTPUTS:
+ *      none
+ *
  */
 void WelcomeScreen(void) {
 
@@ -211,9 +282,14 @@ void WelcomeScreen(void) {
 }
 
 /**
- * Initialization function to set up pins for LCD screen. This
- *  portion of code is inspired by Emily Deppe's
- *  EGR226 slot machine project.
+ * LCD_init: Initialization function to set up pins for LCD screen. This
+ *          portion of code is inspired by Emily Deppe's
+ *          EGR226 slot machine project.
+ *
+ * INPUTS: none
+ *
+ * OUTPUTS:
+ *      none
  */
 void LCD_init(void) {
     P4->DIR = 0xFF;                     // make P4 pins output for data and controls
@@ -236,9 +312,13 @@ void LCD_init(void) {
 }
 
 /**
- * Sends commands to the LCD screen for initialization. This
- *  portion of code is inspired by Emily Deppe's
- *  EGR226 slot machine project.
+ *  LCD_command: Sends commands to the LCD screen for initialization. This
+ *                  portion of code is inspired by Emily Deppe's
+ *                  EGR226 slot machine project.
+ *  INPUTS:
+ *          command (unsigned char) the 8-bit command to send to the LCD
+ * OUTPUTS:
+ *      none
  */
 void LCD_command(unsigned char command) {
     LCD_nibble_write(command & 0xF0, 0);    // upper nibble first
@@ -250,9 +330,14 @@ void LCD_command(unsigned char command) {
 }
 
 /**
- * Sends data to the LCD screen. This
- *  portion of code is inspired by Emily Deppe's
- *  EGR226 slot machine project.
+ *  LCD_data: Sends data to the LCD screen. This
+ *          portion of code is inspired by Emily Deppe's
+ *          EGR226 slot machine project.
+ *  INPUTS:
+ *      data (unsigned char) the 8-bit data to send to the LCD
+ *
+ *  OUTPUTS:
+ *          none
  */
 void LCD_data(unsigned char data) {
     LCD_nibble_write(data & 0xF0, RS);  // upper nibble
@@ -261,9 +346,15 @@ void LCD_data(unsigned char data) {
 }
 
 /**
- * Controls the data that is sent to the LCD screen. This
- *  portion of code is inspired by Emily Deppe's
- *  EGR226 slot machine project.
+ *  LCD_nibble_write: Controls the data that is sent to the LCD screen. This
+ *              portion of code is inspired by Emily Deppe's
+ *              EGR226 slot machine project.
+ *  INPUTS:
+ *          data (unsigned char)
+ *          control (unsigned char)
+ *
+ *  OUTPUTS:
+ *          none
  */
 void LCD_nibble_write(unsigned char data, unsigned char control) {
     data &= 0xF0;                   // clear lower nibble for control

@@ -8,9 +8,13 @@
 
 
 /**
- * Initialization of SysTick Timer. This
- *  portion of code is inspired by Emily Deppe's
- *  EGR226 slot machine project.
+ *  SysTick_init: Initialization of SysTick Timer to 3MHz, no interrupts. This
+ *              portion of code is inspired by Emily Deppe's
+ *              EGR226 slot machine project.
+ *  INPUTS:
+ *          none
+ *  OUTPUTS:
+ *          none
  */
 void SysTick_Init(void) {
     SysTick -> CTRL = 0;            // disable SysTick During step
@@ -20,9 +24,13 @@ void SysTick_Init(void) {
 }
 
 /**
- * Uses SysTick Timer to delay for a given number of ms. This
+ *  SysTick_delay_ms: Uses SysTick Timer to delay for a given number of ms. This
  *  portion of code is inspired by Emily Deppe's
  *  EGR226 slot machine project.
+ *
+ *  INPUTS:
+ *      delay (unit16_t) length of delay in ms.
+ *  OUTPUTS: none
  */
 void SysTick_delay_ms (uint16_t delay) {
     SysTick -> LOAD = ((delay * 3000) -1);          // delay for 1 msecond per delay value
@@ -31,9 +39,13 @@ void SysTick_delay_ms (uint16_t delay) {
 }
 
 /**
- * Uses SysTick Timer to delay for a given number of us. This
+ *  SysTick_delay_us: Uses SysTick Timer to delay for a given number of us. This
  *  portion of code is inspired by Emily Deppe's
  *  EGR226 slot machine project.
+ *  INPUTS:
+ *      delay (unit16_t) delay in us
+ *  OUTPUTS:
+ *          none
  */
 void SysTick_delay_us (uint16_t delay) {
     SysTick -> LOAD = ((delay * 3) -1);             // delay for 1 usecond per delay value

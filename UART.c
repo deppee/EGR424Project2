@@ -9,13 +9,18 @@
 
 extern int received;
 
-int UART_Send(char a){
-    while(!(EUSCI_A0 -> IFG & 0x02));   // wait for transmit buffer to be empty
-    EUSCI_A0 -> TXBUF = a;              // send a character
-
-    return (int)a;
-}
-
+/*
+ * UART_MSend: Send an entire string of data to UART.
+ *
+ * INPUTS:
+ *      a (char*) string to send
+ *
+ * OUTPUTS:
+ *      len (unsigned int) length of string that was sent
+ *
+ * NOTES:
+ *
+ */
 int UART_MSend(char *a){
     unsigned int len = strlen(a);
 
@@ -27,6 +32,20 @@ int UART_MSend(char *a){
 
     return len;
 }
+
+/*
+ * EUSCIA0_IRQHandler:
+ *
+ * INPUTS:
+ *      received (int) global variable that contains the single letter that was
+ *                      received from BT.
+ *
+ * OUTPUTS:
+ *      none
+ *
+ * NOTES:
+ *      none
+ */
 void EUSCIA0_IRQHandler(void){
     if (EUSCI_A0->IFG & BIT0)  // Interrupt on the receive line
     {
@@ -34,16 +53,22 @@ void EUSCIA0_IRQHandler(void){
         received = (int)received;
         EUSCI_A0->IFG &= ~BIT0; // Clear the interrupt flag right away in case new data is ready
     }
-}
-int UART_Receive(void){
-    int b;
-    while ((EUSCI_A0->IFG & BIT0) == 0);    // A character has been sent!!
-    b = EUSCI_A0->RXBUF;            // store the new piece of data at the present location in the buffer
-    EUSCI_A0->IFG &= ~BIT0;                 // Clear the interrupt flag
 
-    return (int)b;
 }
 
+/*
+ * UART_int: Initialize UART capabilities at 115200 bps, no parity, 8-bits, 1-stop bit
+ *           Enable interrupts
+ *
+ * INPUTS:
+ *      none
+ *
+ * OUTPUTS:
+ *      none
+ *
+ * NOTES:
+ *      none
+ */
 void UART_init(void){
 
     P1->SEL0 |=  (BIT2 | BIT3); // P1.2 = RX, P1.3 = TX
